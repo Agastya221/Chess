@@ -8,11 +8,44 @@ try {
         redirect_to('admin.php');
     }
 
+    if (current_student() !== null) {
+        redirect_to('student.php');
+    }
+
     $needsInstall = admin_count() === 0;
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         verify_csrf();
 
+        $loginType = (string) ($_POST['login_type'] ?? 'teacher');
+
+        if ($loginType === 'student') {
+            /* ── Student login via access code ── */
+            $code = trim((string) ($_POST['access_code'] ?? ''));
+
+            if ($code === '') {
+                flash('error', 'Введите код доступа.');
+                redirect_to('login.php');
+            }
+
+            $statement = db()->prepare(
+                'SELECT id FROM students WHERE access_code = :code AND is_active = 1 LIMIT 1'
+            );
+            $statement->execute(['code' => $code]);
+            $student = $statement->fetch();
+
+            if ($student) {
+                session_regenerate_id(true);
+                $_SESSION['student_id'] = (int) $student['id'];
+                unset($_SESSION['admin_id']);
+                redirect_to('student.php');
+            }
+
+            flash('error', 'Неверный код доступа.');
+            redirect_to('login.php');
+        }
+
+        /* ── Teacher login ── */
         $attempts = $_SESSION['login_attempts'] ?? [];
         $now = time();
         $attempts = array_values(array_filter($attempts, static fn ($time) => is_int($time) && $time > $now - 900));
@@ -33,6 +66,7 @@ try {
             session_regenerate_id(true);
             $_SESSION['admin_id'] = (int) $admin['id'];
             $_SESSION['login_attempts'] = [];
+            unset($_SESSION['student_id']);
 
             db()->prepare('UPDATE admin_users SET last_login_at = NOW() WHERE id = :id')
                 ->execute(['id' => (int) $admin['id']]);
@@ -62,7 +96,7 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Вход для учителя</title>
+    <title>Вход</title>
     <meta name="robots" content="noindex, nofollow">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -70,21 +104,36 @@ try {
     <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body class="page-simple">
-    <main class="simple-panel">
+    <main class="simple-panel wide" id="login-panel">
         <a class="back-link" href="index.php">← Доска почёта</a>
         <div class="brand-mark">♚</div>
-        <h1>Вход для учителя</h1>
 
         <?php foreach (consume_flash() as $message): ?>
             <div class="flash <?= e($message['type']) ?>"><?= e($message['message']) ?></div>
         <?php endforeach; ?>
 
         <?php if ($needsInstall): ?>
+            <h1>Добро пожаловать!</h1>
             <div class="flash info">Нужно создать первого администратора.</div>
             <a class="button primary full" href="install.php">Открыть установку</a>
         <?php else: ?>
-            <form method="post" class="form-stack">
+            <!-- Role chooser tabs -->
+            <div class="login-tabs" id="login-tabs">
+                <button class="login-tab active" data-tab="teacher" id="tab-teacher">
+                    <span class="tab-icon">👨‍🏫</span>
+                    <span>Я учитель</span>
+                </button>
+                <button class="login-tab" data-tab="student" id="tab-student">
+                    <span class="tab-icon">🎓</span>
+                    <span>Я ученик</span>
+                </button>
+            </div>
+
+            <!-- Teacher form -->
+            <form method="post" class="form-stack login-form" id="form-teacher">
                 <?= csrf_field() ?>
+                <input type="hidden" name="login_type" value="teacher">
+                <h1>Вход для учителя</h1>
                 <label>
                     <span>Логин</span>
                     <input type="text" name="username" autocomplete="username" required>
@@ -95,8 +144,45 @@ try {
                 </label>
                 <button class="button primary full" type="submit">Войти</button>
             </form>
+
+            <!-- Student form -->
+            <form method="post" class="form-stack login-form" id="form-student" style="display:none">
+                <?= csrf_field() ?>
+                <input type="hidden" name="login_type" value="student">
+                <h1>Вход для ученика</h1>
+                <p class="soft-text" style="margin-bottom:4px">Введи код, который дал учитель</p>
+                <label>
+                    <span>Код доступа</span>
+                    <input type="text" name="access_code" placeholder="xxxx-xxxx"
+                           autocomplete="off" required maxlength="32"
+                           style="text-align:center; font-size:22px; font-weight:800; letter-spacing:4px">
+                </label>
+                <button class="button primary full" type="submit">🚀 Войти</button>
+            </form>
         <?php endif; ?>
     </main>
+
+    <script>
+    (function() {
+        const tabs = document.querySelectorAll('.login-tab');
+        const formTeacher = document.getElementById('form-teacher');
+        const formStudent = document.getElementById('form-student');
+        if (!tabs.length || !formTeacher || !formStudent) return;
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                if (tab.dataset.tab === 'student') {
+                    formTeacher.style.display = 'none';
+                    formStudent.style.display = '';
+                } else {
+                    formTeacher.style.display = '';
+                    formStudent.style.display = 'none';
+                }
+            });
+        });
+    })();
+    </script>
 </body>
 </html>
-

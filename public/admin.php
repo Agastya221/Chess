@@ -56,6 +56,7 @@ function handle_admin_post(): void
         'add_student' => add_student_action(),
         'update_student' => update_student_action(),
         'toggle_student' => toggle_student_action(),
+        'regenerate_code' => regenerate_code_action(),
         'add_award' => add_award_action((int) $admin['id']),
         'update_award' => update_award_action(),
         'delete_award' => delete_award_action(),
@@ -71,9 +72,11 @@ function handle_admin_post(): void
 
 function add_student_action(): void
 {
+    $code = generate_access_code();
+
     $statement = db()->prepare(
-        'INSERT INTO students (private_name, public_name, avatar, notes)
-         VALUES (:private_name, :public_name, :avatar, :notes)'
+        'INSERT INTO students (private_name, public_name, avatar, notes, access_code)
+         VALUES (:private_name, :public_name, :avatar, :notes, :access_code)'
     );
 
     $statement->execute([
@@ -81,9 +84,27 @@ function add_student_action(): void
         'public_name' => require_text(post_string('public_name', 80), 'Псевдоним'),
         'avatar' => valid_avatar(post_string('avatar', 16)),
         'notes' => post_string('notes', 1000) ?: null,
+        'access_code' => $code,
     ]);
 
-    flash('success', 'Ученик добавлен.');
+    flash('success', 'Ученик добавлен. Код доступа: ' . $code);
+    redirect_to('admin.php#students');
+}
+
+function regenerate_code_action(): void
+{
+    $id = post_int('student_id');
+
+    if ($id < 1) {
+        throw new InvalidArgumentException('Ученик не найден.');
+    }
+
+    $code = generate_access_code();
+
+    db()->prepare('UPDATE students SET access_code = :code WHERE id = :id')
+        ->execute(['code' => $code, 'id' => $id]);
+
+    flash('success', 'Новый код доступа: ' . $code);
     redirect_to('admin.php#students');
 }
 
@@ -345,7 +366,7 @@ function update_settings_action(): void
         'school_name' => require_text(post_string('school_name', 120), 'Название'),
         'public_title' => require_text(post_string('public_title', 120), 'Заголовок'),
         'public_subtitle' => post_string('public_subtitle', 180),
-        'leaderboard_limit' => (string) max(1, min(5, post_int('leaderboard_limit', 5))),
+        'leaderboard_limit' => (string) max(1, min(10, post_int('leaderboard_limit', 5))),
     ];
 
     $statement = db()->prepare(
@@ -587,6 +608,9 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                                 <div>
                                     <h3><?= e($student['private_name']) ?></h3>
                                     <p><?= e($student['public_name']) ?> · <?= (int) $student['score'] ?> очков</p>
+                                    <?php if (!empty($student['access_code'])): ?>
+                                        <p style="font-size:13px;color:var(--accent);font-weight:800">🔑 Код: <?= e($student['access_code']) ?></p>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <div class="item-actions">
@@ -621,6 +645,13 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                                         <button class="button primary small" type="submit">Сохранить</button>
                                     </form>
                                 </details>
+
+                                <form method="post" style="display:inline">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="regenerate_code">
+                                    <input type="hidden" name="student_id" value="<?= (int) $student['id'] ?>">
+                                    <button class="button small" type="submit" title="Новый код доступа">🔑</button>
+                                </form>
 
                                 <form method="post">
                                     <?= csrf_field() ?>
@@ -874,7 +905,7 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                     </label>
                     <label>
                         <span>Размер топа</span>
-                        <input type="number" name="leaderboard_limit" min="1" max="5" value="<?= e(setting_value($settings, 'leaderboard_limit', '5')) ?>">
+                        <input type="number" name="leaderboard_limit" min="1" max="10" value="<?= e(setting_value($settings, 'leaderboard_limit', '5')) ?>">
                     </label>
                     <button class="button primary" type="submit">Сохранить</button>
                 </form>

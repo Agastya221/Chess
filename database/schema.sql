@@ -28,12 +28,14 @@ CREATE TABLE IF NOT EXISTS students (
     public_name VARCHAR(80) NOT NULL,
     avatar VARCHAR(16) NOT NULL DEFAULT '♟',
     notes TEXT NULL,
+    access_code VARCHAR(32) NULL UNIQUE,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     archived_at TIMESTAMP NULL DEFAULT NULL,
     INDEX idx_students_active (is_active),
-    INDEX idx_students_public_name (public_name)
+    INDEX idx_students_public_name (public_name),
+    INDEX idx_students_access_code (access_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS reward_types (

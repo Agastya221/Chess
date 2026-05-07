@@ -333,6 +333,7 @@
 
     /* ── Score counter-up ── */
     function initScoreCountUp() {
+        // Leaderboard cards
         document.querySelectorAll('.leader-card').forEach((card) => {
             const scoreEl = card.querySelector('.leader-copy p');
             if (!scoreEl) return;
@@ -353,6 +354,23 @@
                 }
             }, 16);
         });
+
+        // Student cabinet score
+        const scoreNumber = document.querySelector('.score-number');
+        if (scoreNumber) {
+            const target = parseInt(scoreNumber.dataset.target || '0', 10);
+            let current = 0;
+            const step = Math.max(1, Math.ceil(target / 60));
+            scoreNumber.textContent = '0';
+            const timer = setInterval(() => {
+                current = Math.min(current + step, target);
+                scoreNumber.textContent = current.toString();
+                if (current >= target) {
+                    clearInterval(timer);
+                    soundStar();
+                }
+            }, 16);
+        }
     }
 
     /* ══════════════════════════════════════
@@ -425,6 +443,101 @@
     }
 
     /* ══════════════════════════════════════
+       🎓 STUDENT CABINET INTERACTIONS
+    ══════════════════════════════════════ */
+    function initStudentCabinet() {
+        const isStudent = document.querySelector('.student-cabinet');
+        if (!isStudent) return;
+
+        // Avatar click interaction
+        const avatar = document.getElementById('student-avatar');
+        if (avatar) {
+            let clickCount = 0;
+            avatar.style.cursor = 'pointer';
+            avatar.addEventListener('click', (e) => {
+                clickCount++;
+                soundCelebrate();
+                starBurst(e.clientX, e.clientY);
+                showPraiseAt(e.clientX, e.clientY - 40);
+
+                avatar.animate([
+                    { transform: 'scale(1) rotate(0deg)' },
+                    { transform: 'scale(1.3) rotate(15deg)' },
+                    { transform: 'scale(1.3) rotate(-15deg)' },
+                    { transform: 'scale(1) rotate(0deg)' },
+                ], { duration: 500, easing: 'ease-in-out' });
+
+                if (clickCount % 3 === 0) fireConfetti();
+            });
+            avatar.addEventListener('mouseenter', soundPop);
+        }
+
+        // Score card click interaction
+        const scoreCard = document.getElementById('score-card');
+        if (scoreCard) {
+            scoreCard.style.cursor = 'pointer';
+            scoreCard.addEventListener('click', (e) => {
+                const rect = scoreCard.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                
+                soundCelebrate();
+                starBurst(e.clientX, e.clientY);
+                showPraiseAt(cx, cy - 30);
+                
+                scoreCard.animate([
+                    { transform: 'scale(1)' },
+                    { transform: 'scale(1.05) rotate(1deg)' },
+                    { transform: 'scale(1)' },
+                ], { duration: 300, easing: 'ease-in-out' });
+                
+                const scoreNumber = scoreCard.querySelector('.score-number');
+                if (scoreNumber) {
+                    scoreNumber.animate([
+                        { transform: 'scale(1)' },
+                        { transform: 'scale(1.4)', color: '#ffd700' },
+                        { transform: 'scale(1)' },
+                    ], { duration: 400, easing: 'ease-in-out' });
+                }
+            });
+            scoreCard.addEventListener('mouseenter', soundClick);
+        }
+
+        // Award cards interactions
+        document.querySelectorAll('.award-card').forEach((card, i) => {
+            // Staggered entrance
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(-30px)';
+            setTimeout(() => {
+                card.style.transition = 'opacity .4s ease, transform .4s cubic-bezier(.34,1.56,.64,1)';
+                card.style.opacity = '1';
+                card.style.transform = '';
+            }, 300 + i * 80);
+
+            // Click interaction
+            card.addEventListener('click', (e) => {
+                const rect = card.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                
+                soundPop();
+                setTimeout(soundStar, 50);
+                burstParticles(e.clientX, e.clientY, 15, { emojis: ['💎','🏆','⭐'], size: 18 });
+                showPraiseAt(cx, cy - 20);
+
+                card.animate([
+                    { transform: 'scale(1)' },
+                    { transform: 'scale(1.04) rotate(-1deg)' },
+                    { transform: 'scale(1.04) rotate(1deg)' },
+                    { transform: 'scale(1)' },
+                ], { duration: 400, easing: 'ease-in-out' });
+            });
+            
+            card.addEventListener('mouseenter', soundPop);
+        });
+    }
+
+    /* ══════════════════════════════════════
        INIT (only on public page)
     ══════════════════════════════════════ */
     const isPublic = document.querySelector('.public-page');
@@ -437,6 +550,7 @@
         initBrandMark();
         initSeasonPill();
         createBanner();
+        initStudentCabinet();
 
         /* Spawn floating chess pieces periodically */
         spawnFloatingWord();

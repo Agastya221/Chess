@@ -255,11 +255,71 @@ function leaderboard_top(int $limit = 5): array
          ) totals ON totals.student_id = s.id
          WHERE s.is_active = 1
          ORDER BY totals.score DESC, totals.awards_count DESC, s.created_at ASC
-         LIMIT ' . max(1, min(5, $limit))
+         LIMIT ' . max(1, min(10, $limit))
     );
 
     $statement->execute(['season_id' => (int) $season['id']]);
 
+    return $statement->fetchAll();
+}
+
+/* ── Student Authentication ── */
+
+function generate_access_code(): string
+{
+    return substr(bin2hex(random_bytes(4)), 0, 4) . '-' . substr(bin2hex(random_bytes(4)), 0, 4);
+}
+
+function current_student(): ?array
+{
+    static $student = null;
+
+    if ($student !== null) {
+        return $student;
+    }
+
+    $studentId = $_SESSION['student_id'] ?? null;
+
+    if (!$studentId) {
+        return null;
+    }
+
+    $statement = db()->prepare(
+        'SELECT id, private_name, public_name, avatar, access_code
+         FROM students WHERE id = :id AND is_active = 1 LIMIT 1'
+    );
+    $statement->execute(['id' => $studentId]);
+    $student = $statement->fetch() ?: null;
+
+    return $student;
+}
+
+function require_student(): void
+{
+    if (current_student() === null) {
+        redirect_to('student_login.php');
+    }
+}
+
+function student_score(int $studentId, int $seasonId): int
+{
+    $statement = db()->prepare(
+        'SELECT COALESCE(SUM(points), 0) FROM awards WHERE student_id = :sid AND season_id = :season'
+    );
+    $statement->execute(['sid' => $studentId, 'season' => $seasonId]);
+    return (int) $statement->fetchColumn();
+}
+
+function student_awards(int $studentId, int $seasonId, int $limit = 50): array
+{
+    $statement = db()->prepare(
+        'SELECT a.title, a.icon, a.points, a.note, a.lesson_date, a.created_at
+         FROM awards a
+         WHERE a.student_id = :sid AND a.season_id = :season
+         ORDER BY a.created_at DESC
+         LIMIT ' . max(1, min(100, $limit))
+    );
+    $statement->execute(['sid' => $studentId, 'season' => $seasonId]);
     return $statement->fetchAll();
 }
 

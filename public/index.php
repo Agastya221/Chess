@@ -30,7 +30,9 @@ $subtitle = setting_value($settings, 'public_subtitle', 'Лучшие резул
 </head>
 <body class="public-page">
     <header class="public-header">
-        <a class="teacher-link" href="login.php">Вход</a>
+        <div class="public-header-nav">
+            <a class="header-btn" href="login.php">Вход</a>
+        </div>
         <div class="public-hero">
             <div class="brand-mark">♚</div>
             <p class="eyebrow"><?= e($schoolName) ?></p>

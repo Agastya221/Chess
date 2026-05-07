@@ -37,6 +37,7 @@ services:
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
       - ./database/demo.sql:/docker-entrypoint-initdb.d/03-demo.sql:ro
+      - ./database/migrate_students.sql:/docker-entrypoint-initdb.d/04-migrate-students.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
