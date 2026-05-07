@@ -1,0 +1,481 @@
+(function () {
+    /* ══════════════════════════════════════
+       🔊 SOUND ENGINE (Web Audio API)
+    ══════════════════════════════════════ */
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function getAudio() {
+        if (!audioCtx) audioCtx = new AudioCtx();
+        return audioCtx;
+    }
+
+    function playTone(freq, duration, type, vol) {
+        try {
+            const ctx = getAudio();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = type || 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
+            gain.gain.setValueAtTime(vol || 0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + duration);
+        } catch (_) {}
+    }
+
+    function soundClick() {
+        playTone(880, 0.08, 'sine', 0.12);
+        setTimeout(() => playTone(1100, 0.08, 'sine', 0.10), 50);
+    }
+
+    function soundCelebrate() {
+        const notes = [523, 659, 784, 1047, 1319];
+        notes.forEach((n, i) => setTimeout(() => playTone(n, 0.18, 'sine', 0.12), i * 80));
+    }
+
+    function soundPop() {
+        playTone(600, 0.06, 'triangle', 0.10);
+    }
+
+    function soundWhoosh() {
+        try {
+            const ctx = getAudio();
+            const bufferSize = ctx.sampleRate * 0.15;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+            const source = ctx.createBufferSource();
+            const gain = ctx.createGain();
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(2000, ctx.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.15);
+            source.buffer = buffer;
+            gain.gain.setValueAtTime(0.08, ctx.currentTime);
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+            source.start();
+        } catch (_) {}
+    }
+
+    function soundStar() {
+        playTone(1200, 0.10, 'sine', 0.08);
+        setTimeout(() => playTone(1600, 0.12, 'sine', 0.06), 70);
+    }
+
+    /* ══════════════════════════════════════
+       ✨ PARTICLE SYSTEM
+    ══════════════════════════════════════ */
+    const COLORS = ['#f59e0b', '#7c3aed', '#ec4899', '#10b981', '#60a5fa', '#ef4444', '#f97316'];
+    const EMOJIS_STAR = ['⭐', '🌟', '✨', '💫', '🎉', '🎊', '🏆', '♔', '♕'];
+
+    function createParticle(x, y, opts) {
+        const el = document.createElement('div');
+        const size = opts.size || 10;
+        const color = opts.color || COLORS[Math.floor(Math.random() * COLORS.length)];
+        const emoji = opts.emoji;
+
+        Object.assign(el.style, {
+            position: 'fixed',
+            left: x + 'px',
+            top: y + 'px',
+            width: size + 'px',
+            height: size + 'px',
+            pointerEvents: 'none',
+            zIndex: '99999',
+            borderRadius: opts.square ? '3px' : '50%',
+            fontSize: size + 'px',
+            lineHeight: '1',
+            textAlign: 'center',
+        });
+
+        if (emoji) {
+            el.textContent = emoji;
+            el.style.background = 'none';
+            el.style.width = 'auto';
+            el.style.height = 'auto';
+        } else {
+            el.style.background = color;
+        }
+
+        document.body.appendChild(el);
+        return el;
+    }
+
+    function burstParticles(x, y, count, opts) {
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+            const velocity = 120 + Math.random() * 180;
+            const p = createParticle(x, y, {
+                size: opts.size || (6 + Math.random() * 8),
+                color: opts.color,
+                emoji: opts.emojis ? opts.emojis[Math.floor(Math.random() * opts.emojis.length)] : null,
+                square: Math.random() > 0.5,
+            });
+
+            const dx = Math.cos(angle) * velocity;
+            const dy = Math.sin(angle) * velocity - 60;
+            const rot = Math.random() * 720 - 360;
+            const dur = 700 + Math.random() * 500;
+
+            p.animate([
+                { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 },
+                { transform: `translate(${dx}px, ${dy + 120}px) rotate(${rot}deg) scale(0)`, opacity: 0 }
+            ], { duration: dur, easing: 'cubic-bezier(.25,.46,.45,.94)', fill: 'forwards' });
+
+            setTimeout(() => p.remove(), dur + 50);
+        }
+    }
+
+    /* ── Star burst (emojis) ── */
+    function starBurst(x, y) {
+        burstParticles(x, y, 12, { emojis: EMOJIS_STAR, size: 22 });
+        burstParticles(x, y, 20, { size: 6 });
+    }
+
+    /* ══════════════════════════════════════
+       💬 ENCOURAGING WORDS SYSTEM
+    ══════════════════════════════════════ */
+    const PRAISE_WORDS = [
+        'Молодец! 🎉', 'Отлично! ⭐', 'Супер! 🚀', 'Класс! 💪',
+        'Чемпион! 🏆', 'Браво! 👏', 'Круто! 🔥', 'Ты лучший! 🌟',
+        'Невероятно! 💫', 'Фантастика! ✨', 'Гениально! 🧠',
+        'Так держать! 🎯', 'Здорово! 🥇', 'Мастер! ♔', 'Победа! 🎊',
+        'Умница! 💎', 'Герой! 🦸', 'Вперёд! 🚀', 'Сила! 💥', 'Wow! 🤩',
+    ];
+
+    function showPraiseAt(x, y) {
+        const word = PRAISE_WORDS[Math.floor(Math.random() * PRAISE_WORDS.length)];
+        const el = document.createElement('div');
+        el.className = 'praise-popup';
+        el.textContent = word;
+        Object.assign(el.style, {
+            position: 'fixed',
+            left: x + 'px',
+            top: y + 'px',
+            zIndex: '100000',
+            pointerEvents: 'none',
+        });
+        document.body.appendChild(el);
+        el.animate([
+            { transform: 'translate(-50%, 0) scale(0.5)', opacity: 0 },
+            { transform: 'translate(-50%, -20px) scale(1.1)', opacity: 1, offset: 0.2 },
+            { transform: 'translate(-50%, -60px) scale(1)', opacity: 1, offset: 0.7 },
+            { transform: 'translate(-50%, -100px) scale(0.8)', opacity: 0 },
+        ], { duration: 1600, easing: 'ease-out', fill: 'forwards' });
+        setTimeout(() => el.remove(), 1700);
+    }
+
+    /* ── Auto floating words ── */
+    function spawnFloatingWord() {
+        const words = ['♔', '♕', '♖', '♗', '♘', '♙', '⭐', '🏆', '✨', '🎯'];
+        const el = document.createElement('div');
+        el.className = 'floating-word';
+        el.textContent = words[Math.floor(Math.random() * words.length)];
+        const startX = Math.random() * window.innerWidth;
+        Object.assign(el.style, {
+            position: 'fixed',
+            left: startX + 'px',
+            bottom: '-50px',
+            fontSize: (24 + Math.random() * 30) + 'px',
+            opacity: '0',
+            pointerEvents: 'none',
+            zIndex: '1',
+        });
+        document.body.appendChild(el);
+
+        const drift = (Math.random() - 0.5) * 200;
+        const dur = 4000 + Math.random() * 4000;
+
+        el.animate([
+            { transform: `translateX(0) rotate(0deg)`, opacity: 0 },
+            { opacity: 0.25, offset: 0.1 },
+            { opacity: 0.25, offset: 0.8 },
+            { transform: `translateX(${drift}px) translateY(-${window.innerHeight + 100}px) rotate(${Math.random() * 90 - 45}deg)`, opacity: 0 },
+        ], { duration: dur, easing: 'linear', fill: 'forwards' });
+
+        setTimeout(() => el.remove(), dur + 100);
+    }
+
+    /* ── Scrolling encouragement banner ── */
+    function createBanner() {
+        const isPublic = document.querySelector('.public-page');
+        if (!isPublic) return;
+
+        const banner = document.createElement('div');
+        banner.className = 'encourage-banner';
+        const messages = [
+            '🏆 Каждый ход делает тебя сильнее!',
+            '⭐ Шахматы — игра чемпионов!',
+            '🚀 Ты становишься лучше с каждым днём!',
+            '♔ Будущий гроссмейстер среди нас!',
+            '🎯 Думай, играй, побеждай!',
+            '💪 Практика ведёт к мастерству!',
+            '🧠 Шахматы тренируют ум!',
+            '🌟 Ты — звезда шахмат!',
+        ];
+        banner.innerHTML = '<div class="banner-track">' +
+            messages.concat(messages).map(m => `<span>${m}</span>`).join('') +
+            '</div>';
+        document.body.appendChild(banner);
+    }
+
+    /* ══════════════════════════════════════
+       🖱️ SPARKLE CURSOR TRAIL
+    ══════════════════════════════════════ */
+    let lastTrail = 0;
+    function initCursorTrail() {
+        if (!document.querySelector('.public-page')) return;
+        document.addEventListener('mousemove', (e) => {
+            const now = Date.now();
+            if (now - lastTrail < 50) return;
+            lastTrail = now;
+            const spark = document.createElement('div');
+            spark.className = 'cursor-spark';
+            spark.textContent = ['✦', '✧', '·', '⋆'][Math.floor(Math.random() * 4)];
+            Object.assign(spark.style, {
+                left: e.clientX + 'px',
+                top: e.clientY + 'px',
+                color: COLORS[Math.floor(Math.random() * COLORS.length)],
+                fontSize: (10 + Math.random() * 14) + 'px',
+            });
+            document.body.appendChild(spark);
+            spark.animate([
+                { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
+                { transform: `translate(${(Math.random()-0.5)*40}px, ${-20 - Math.random()*30}px) scale(0)`, opacity: 0 },
+            ], { duration: 600, easing: 'ease-out', fill: 'forwards' });
+            setTimeout(() => spark.remove(), 650);
+        });
+    }
+
+    /* ══════════════════════════════════════
+       🃏 CARD INTERACTIONS
+    ══════════════════════════════════════ */
+    function initCardClicks() {
+        const cards = document.querySelectorAll('.leader-card');
+        cards.forEach((card, i) => {
+            /* Entrance animation */
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(50px) scale(0.9)';
+            setTimeout(() => {
+                card.style.transition = 'opacity .5s ease, transform .5s cubic-bezier(.34,1.56,.64,1)';
+                card.style.opacity = '1';
+                card.style.transform = '';
+                soundPop();
+            }, 200 + i * 150);
+
+            /* Click interaction */
+            card.addEventListener('click', (e) => {
+                const rect = card.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+
+                /* Sound */
+                soundCelebrate();
+
+                /* Star burst */
+                starBurst(e.clientX, e.clientY);
+
+                /* Praise popup */
+                showPraiseAt(cx, cy - 20);
+
+                /* Card wiggle */
+                card.animate([
+                    { transform: 'scale(1) rotate(0deg)' },
+                    { transform: 'scale(1.06) rotate(-2deg)' },
+                    { transform: 'scale(1.08) rotate(2deg)' },
+                    { transform: 'scale(1.04) rotate(-1deg)' },
+                    { transform: 'scale(1) rotate(0deg)' },
+                ], { duration: 500, easing: 'ease-in-out' });
+
+                /* Score bounce */
+                const scoreEl = card.querySelector('.leader-copy p');
+                if (scoreEl) {
+                    scoreEl.animate([
+                        { transform: 'scale(1)', color: '' },
+                        { transform: 'scale(1.4)', color: '#7c3aed' },
+                        { transform: 'scale(1)', color: '' },
+                    ], { duration: 400, easing: 'ease-in-out' });
+                }
+
+                /* Avatar spin */
+                const avatar = card.querySelector('.avatar-ring');
+                if (avatar) {
+                    avatar.animate([
+                        { transform: 'rotate(0deg) scale(1)' },
+                        { transform: 'rotate(360deg) scale(1.2)' },
+                        { transform: 'rotate(360deg) scale(1)' },
+                    ], { duration: 600, easing: 'cubic-bezier(.34,1.56,.64,1)' });
+                }
+
+                /* Ring pulse effect */
+                const ring = document.createElement('div');
+                ring.className = 'click-ring';
+                Object.assign(ring.style, {
+                    position: 'fixed',
+                    left: (e.clientX - 30) + 'px',
+                    top: (e.clientY - 30) + 'px',
+                });
+                document.body.appendChild(ring);
+                setTimeout(() => ring.remove(), 700);
+            });
+
+            /* Hover sound */
+            card.addEventListener('mouseenter', () => {
+                soundClick();
+            });
+        });
+    }
+
+    /* ── Score counter-up ── */
+    function initScoreCountUp() {
+        document.querySelectorAll('.leader-card').forEach((card) => {
+            const scoreEl = card.querySelector('.leader-copy p');
+            if (!scoreEl) return;
+            const text = scoreEl.textContent || '';
+            const match = text.match(/(\d+)/);
+            if (!match) return;
+            const target = parseInt(match[1], 10);
+            const suffix = text.replace(match[1], '').trim();
+            let current = 0;
+            const step = Math.max(1, Math.ceil(target / 55));
+            scoreEl.textContent = `0 ${suffix}`;
+            const timer = setInterval(() => {
+                current = Math.min(current + step, target);
+                scoreEl.textContent = `${current} ${suffix}`;
+                if (current >= target) {
+                    clearInterval(timer);
+                    soundStar();
+                }
+            }, 16);
+        });
+    }
+
+    /* ══════════════════════════════════════
+       🎉 CONFETTI CANNON (on page load)
+    ══════════════════════════════════════ */
+    function fireConfetti() {
+        if (!document.querySelector('.leader-card.gold')) return;
+        setTimeout(() => {
+            soundCelebrate();
+            const cx = window.innerWidth / 2;
+            burstParticles(cx, window.innerHeight * 0.3, 35, { size: 8 });
+            burstParticles(cx - 100, window.innerHeight * 0.35, 20, { emojis: ['⭐','🌟','🏆','✨','🎉'], size: 24 });
+            burstParticles(cx + 100, window.innerHeight * 0.35, 20, { emojis: ['♔','♕','♖','💎','🎊'], size: 24 });
+        }, 800);
+    }
+
+    /* ══════════════════════════════════════
+       🎹 INTERACTIVE BRAND MARK
+    ══════════════════════════════════════ */
+    function initBrandMark() {
+        const mark = document.querySelector('.public-hero .brand-mark');
+        if (!mark) return;
+        let clickCount = 0;
+        mark.style.cursor = 'pointer';
+        mark.addEventListener('click', (e) => {
+            clickCount++;
+            soundCelebrate();
+            starBurst(e.clientX, e.clientY);
+            showPraiseAt(e.clientX, e.clientY - 40);
+
+            mark.animate([
+                { transform: 'scale(1) rotate(0deg)' },
+                { transform: 'scale(1.3) rotate(20deg)' },
+                { transform: 'scale(1.3) rotate(-20deg)' },
+                { transform: 'scale(1) rotate(0deg)' },
+            ], { duration: 500, easing: 'ease-in-out' });
+
+            /* Easter egg — extra confetti every 5 clicks */
+            if (clickCount % 5 === 0) {
+                for (let i = 0; i < 3; i++) {
+                    setTimeout(() => {
+                        burstParticles(
+                            Math.random() * window.innerWidth,
+                            Math.random() * window.innerHeight * 0.5,
+                            25, { emojis: EMOJIS_STAR, size: 28 }
+                        );
+                        soundCelebrate();
+                    }, i * 300);
+                }
+            }
+        });
+    }
+
+    /* ══════════════════════════════════════
+       🎯 SEASON PILL INTERACTION
+    ══════════════════════════════════════ */
+    function initSeasonPill() {
+        const pill = document.querySelector('.season-pill');
+        if (!pill) return;
+        pill.style.cursor = 'pointer';
+        pill.addEventListener('click', (e) => {
+            soundWhoosh();
+            burstParticles(e.clientX, e.clientY, 15, { size: 5 });
+            pill.animate([
+                { transform: 'scale(1)' },
+                { transform: 'scale(1.15)' },
+                { transform: 'scale(1)' },
+            ], { duration: 350, easing: 'ease-in-out' });
+        });
+    }
+
+    /* ══════════════════════════════════════
+       INIT (only on public page)
+    ══════════════════════════════════════ */
+    const isPublic = document.querySelector('.public-page');
+
+    if (isPublic) {
+        initCardClicks();
+        initScoreCountUp();
+        fireConfetti();
+        initCursorTrail();
+        initBrandMark();
+        initSeasonPill();
+        createBanner();
+
+        /* Spawn floating chess pieces periodically */
+        spawnFloatingWord();
+        setInterval(spawnFloatingWord, 2500);
+    }
+
+    /* ── FORM HANDLING (admin) ── */
+    document.querySelectorAll('form').forEach((form) => {
+        form.addEventListener('submit', (event) => {
+            const submitter = event.submitter;
+            const message = submitter ? submitter.getAttribute('data-confirm') : null;
+            if (message && !window.confirm(message)) { event.preventDefault(); return; }
+            if (submitter && submitter.matches('button[type="submit"]')) {
+                submitter.dataset.originalText = submitter.textContent || '';
+                submitter.textContent = 'Сохранение...';
+            }
+        });
+    });
+
+    /* ── DETAILS ACCORDION (admin) ── */
+    document.querySelectorAll('details').forEach((details) => {
+        details.addEventListener('toggle', () => {
+            if (!details.open) return;
+            document.querySelectorAll('details[open]').forEach((other) => {
+                if (other !== details && other.closest('section') === details.closest('section')) other.open = false;
+            });
+        });
+    });
+
+    /* ── REWARD PICKER (admin) ── */
+    document.querySelectorAll('.reward-picker').forEach((picker) => {
+        const choices = picker.querySelectorAll('.reward-choice');
+        choices.forEach((choice) => {
+            const input = choice.querySelector('input[type="radio"]');
+            if (!input) return;
+            input.addEventListener('change', () => {
+                choices.forEach((item) => item.classList.remove('is-selected'));
+                choice.classList.add('is-selected');
+            });
+        });
+    });
+})();
