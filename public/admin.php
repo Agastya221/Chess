@@ -41,6 +41,20 @@ function clean_date(string $date, ?string $default = null): string
     return $date;
 }
 
+function is_ajax_request(): bool
+{
+    return !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+}
+
+function json_response(array $data, int $status = 200): never
+{
+    http_response_code($status);
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 function handle_admin_post(): void
 {
     verify_csrf();
@@ -49,6 +63,7 @@ function handle_admin_post(): void
     $admin = current_admin();
 
     if (!$admin) {
+        if (is_ajax_request()) json_response(['ok' => false, 'message' => 'Требуется авторизация.'], 401);
         redirect_to('login.php');
     }
 
@@ -174,23 +189,43 @@ function add_award_action(int $adminId): void
     }
 
     if ($studentIds === []) {
+        if (is_ajax_request()) json_response(['ok' => false, 'message' => 'Выберите хотя бы одного ученика.']);
         throw new InvalidArgumentException('Выберите хотя бы одного ученика.');
     }
 
-    $rewardTypeId = post_int('reward_type_id');
-    $note         = post_string('note', 1000) ?: null;
-    $lessonDate   = clean_date((string) ($_POST['lesson_date'] ?? ''), date('Y-m-d'));
-    $season       = active_season();
+    /* Support multiple reward_type_ids[] OR legacy single reward_type_id */
+    $rewardTypeIds = [];
+    if (!empty($_POST['reward_type_ids']) && is_array($_POST['reward_type_ids'])) {
+        foreach ($_POST['reward_type_ids'] as $raw) {
+            $rid = (int) $raw;
+            if ($rid > 0) $rewardTypeIds[] = $rid;
+        }
+    } elseif (post_int('reward_type_id') > 0) {
+        $rewardTypeIds[] = post_int('reward_type_id');
+    }
+
+    if ($rewardTypeIds === []) {
+        if (is_ajax_request()) json_response(['ok' => false, 'message' => 'Выберите хотя бы одну награду.']);
+        throw new InvalidArgumentException('Выберите хотя бы одну награду.');
+    }
+
+    $note       = post_string('note', 1000) ?: null;
+    $lessonDate = clean_date((string) ($_POST['lesson_date'] ?? ''), date('Y-m-d'));
+    $season     = active_season();
 
     if (!$season) {
+        if (is_ajax_request()) json_response(['ok' => false, 'message' => 'Создайте активный сезон.']);
         throw new InvalidArgumentException('Создайте активный сезон.');
     }
 
-    $rewardStatement = db()->prepare('SELECT * FROM reward_types WHERE id = :id AND is_active = 1 LIMIT 1');
-    $rewardStatement->execute(['id' => $rewardTypeId]);
-    $reward = $rewardStatement->fetch();
+    /* Fetch all selected rewards */
+    $placeholders = implode(',', array_fill(0, count($rewardTypeIds), '?'));
+    $rewardStmt = db()->prepare("SELECT * FROM reward_types WHERE id IN ($placeholders) AND is_active = 1");
+    $rewardStmt->execute($rewardTypeIds);
+    $rewards = $rewardStmt->fetchAll();
 
-    if (!$reward) {
+    if (count($rewards) === 0) {
+        if (is_ajax_request()) json_response(['ok' => false, 'message' => 'Выберите активную награду.']);
         throw new InvalidArgumentException('Выберите активную награду.');
     }
 
@@ -203,6 +238,7 @@ function add_award_action(int $adminId): void
 
     db()->beginTransaction();
     $count = 0;
+    $totalPoints = 0;
 
     foreach ($studentIds as $studentId) {
         /* Verify student exists and is active */
@@ -210,23 +246,43 @@ function add_award_action(int $adminId): void
         $check->execute(['id' => $studentId]);
         if (!$check->fetch()) continue;
 
-        $insertStatement->execute([
-            'student_id'     => $studentId,
-            'reward_type_id' => (int) $reward['id'],
-            'season_id'      => (int) $season['id'],
-            'title'          => (string) $reward['title'],
-            'icon'           => (string) $reward['icon'],
-            'points'         => (int) $reward['points'],
-            'note'           => $note,
-            'lesson_date'    => $lessonDate,
-            'created_by'     => $adminId,
-        ]);
+        foreach ($rewards as $reward) {
+            $insertStatement->execute([
+                'student_id'     => $studentId,
+                'reward_type_id' => (int) $reward['id'],
+                'season_id'      => (int) $season['id'],
+                'title'          => (string) $reward['title'],
+                'icon'           => (string) $reward['icon'],
+                'points'         => (int) $reward['points'],
+                'note'           => $note,
+                'lesson_date'    => $lessonDate,
+                'created_by'     => $adminId,
+            ]);
+            $totalPoints += (int) $reward['points'];
+        }
         $count++;
     }
 
     db()->commit();
 
-    flash('success', 'Награда выдана ' . $count . ' ученикам из ' . count($studentIds) . '.');
+    $msg = count($rewards) > 1
+        ? count($rewards) . ' наград выдано ' . $count . ' ученикам (+' . $totalPoints . ' очков каждому).'
+        : 'Награда выдана ' . $count . ' ученикам.';
+
+    if (is_ajax_request()) {
+        /* Return updated student scores for UI refresh */
+        $updatedStudents = [];
+        foreach ($studentIds as $sid) {
+            $scoreStmt = db()->prepare(
+                'SELECT COALESCE(SUM(points),0) AS score FROM awards WHERE student_id = :sid AND season_id = :season'
+            );
+            $scoreStmt->execute(['sid' => $sid, 'season' => (int) $season['id']]);
+            $updatedStudents[$sid] = (int) $scoreStmt->fetchColumn();
+        }
+        json_response(['ok' => true, 'message' => $msg, 'updated_scores' => $updatedStudents]);
+    }
+
+    flash('success', $msg);
     redirect_to('admin.php#award');
 }
 
@@ -384,10 +440,21 @@ function activate_season_action(): void
 function update_settings_action(): void
 {
     $settings = [
-        'school_name' => require_text(post_string('school_name', 120), 'Название'),
-        'public_title' => require_text(post_string('public_title', 120), 'Заголовок'),
-        'public_subtitle' => post_string('public_subtitle', 180),
-        'leaderboard_limit' => (string) max(1, min(10, post_int('leaderboard_limit', 5))),
+        'school_name'           => require_text(post_string('school_name', 120), 'Название'),
+        'public_title'          => require_text(post_string('public_title', 120), 'Заголовок'),
+        'public_subtitle'       => post_string('public_subtitle', 180),
+        'leaderboard_limit'     => (string) max(1, min(10, post_int('leaderboard_limit', 5))),
+        /* CMS text fields */
+        'cms_login_btn'         => post_string('cms_login_btn', 80) ?: 'Вход',
+        'cms_current_season'    => post_string('cms_current_season', 80) ?: 'Текущий сезон',
+        'cms_empty_title'       => post_string('cms_empty_title', 120) ?: 'Доска скоро откроется',
+        'cms_empty_subtitle'    => post_string('cms_empty_subtitle', 180) ?: 'Первые награды появятся после занятий.',
+        'cms_leaderboard_label' => post_string('cms_leaderboard_label', 80) ?: 'очков',
+        'cms_rank_label'        => post_string('cms_rank_label', 80) ?: 'место',
+        'cms_no_awards_title'   => post_string('cms_no_awards_title', 120) ?: 'Пока нет наград',
+        'cms_no_awards_sub'     => post_string('cms_no_awards_sub', 180) ?: 'Продолжай стараться — скоро они появятся!',
+        'cms_my_awards_title'   => post_string('cms_my_awards_title', 80) ?: '🎖 Мои награды',
+        'cms_leaderboard_btn'   => post_string('cms_leaderboard_btn', 80) ?: '🏆 Посмотреть Доску почёта',
     ];
 
     $statement = db()->prepare(
@@ -397,7 +464,7 @@ function update_settings_action(): void
 
     foreach ($settings as $key => $value) {
         $statement->execute([
-            'setting_key' => $key,
+            'setting_key'   => $key,
             'setting_value' => $value,
         ]);
     }
@@ -424,6 +491,10 @@ try {
             $message = $exception instanceof InvalidArgumentException || (bool) config_value('app.debug', false)
                 ? $exception->getMessage()
                 : 'Не удалось сохранить изменения.';
+
+            if (is_ajax_request()) {
+                json_response(['ok' => false, 'message' => $message]);
+            }
 
             flash('error', $message);
             redirect_to('admin.php');
@@ -581,10 +652,10 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                         <?php endforeach; ?>
                     </div>
 
-                    <div class="reward-picker" role="radiogroup" aria-label="Тип награды">
-                        <?php foreach ($activeRewardTypes as $index => $reward): ?>
-                            <label class="reward-choice <?= $index === 0 ? 'is-selected' : '' ?>" style="--reward-color: <?= e($reward['color']) ?>">
-                                <input type="radio" name="reward_type_id" value="<?= (int) $reward['id'] ?>" <?= $index === 0 ? 'checked' : '' ?>>
+                    <div class="reward-picker reward-picker-multi" role="group" aria-label="Тип награды">
+                        <?php foreach ($activeRewardTypes as $reward): ?>
+                            <label class="reward-choice" style="--reward-color: <?= e($reward['color']) ?>">
+                                <input type="checkbox" name="reward_type_ids[]" value="<?= (int) $reward['id'] ?>">
                                 <span class="reward-icon"><?= e($reward['icon']) ?></span>
                                 <span class="reward-title"><?= e($reward['title']) ?></span>
                                 <strong>+<?= (int) $reward['points'] ?></strong>
@@ -936,32 +1007,95 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                         <div class="section-icon purple">⚙️</div>
                         <div>
                             <p class="eyebrow">Публичная страница</p>
-                            <h2>Настройки</h2>
+                            <h2>Настройки и тексты</h2>
                         </div>
                     </div>
                 </div>
                 <div class="section-body">
-                <form method="post" class="form-stack settings-form">
+                <div class="settings-layout">
+                <form method="post" class="form-stack settings-form" id="cms-settings-form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="update_settings">
+
+                    <p class="settings-group-label">🏫 Основное</p>
+                    <div class="form-grid two">
+                        <label>
+                            <span>Название школы</span>
+                            <input type="text" name="school_name" id="cms-school_name" value="<?= e(setting_value($settings, 'school_name', 'Юные шахматисты')) ?>" required>
+                        </label>
+                        <label>
+                            <span>Размер топа (1–10)</span>
+                            <input type="number" name="leaderboard_limit" min="1" max="10" value="<?= e(setting_value($settings, 'leaderboard_limit', '5')) ?>">
+                        </label>
+                    </div>
                     <label>
-                        <span>Название</span>
-                        <input type="text" name="school_name" value="<?= e(setting_value($settings, 'school_name', 'Юные шахматисты')) ?>" required>
-                    </label>
-                    <label>
-                        <span>Заголовок</span>
-                        <input type="text" name="public_title" value="<?= e(setting_value($settings, 'public_title', 'Шахматная доска почёта')) ?>" required>
+                        <span>Заголовок доски почёта</span>
+                        <input type="text" name="public_title" id="cms-public_title" value="<?= e(setting_value($settings, 'public_title', 'Шахматная доска почёта')) ?>" required>
                     </label>
                     <label>
                         <span>Подзаголовок</span>
-                        <input type="text" name="public_subtitle" value="<?= e(setting_value($settings, 'public_subtitle', 'Лучшие результаты сезона')) ?>">
+                        <input type="text" name="public_subtitle" id="cms-public_subtitle" value="<?= e(setting_value($settings, 'public_subtitle', 'Лучшие результаты сезона')) ?>">
                     </label>
-                    <label>
-                        <span>Размер топа</span>
-                        <input type="number" name="leaderboard_limit" min="1" max="10" value="<?= e(setting_value($settings, 'leaderboard_limit', '5')) ?>">
-                    </label>
-                    <button class="button primary" type="submit">Сохранить</button>
+
+                    <p class="settings-group-label">🌐 Тексты публичной страницы</p>
+                    <div class="form-grid two">
+                        <label>
+                            <span>Кнопка «Вход»</span>
+                            <input type="text" name="cms_login_btn" id="cms-cms_login_btn" value="<?= e(setting_value($settings, 'cms_login_btn', 'Вход')) ?>">
+                        </label>
+                        <label>
+                            <span>Текущий сезон (метка)</span>
+                            <input type="text" name="cms_current_season" id="cms-cms_current_season" value="<?= e(setting_value($settings, 'cms_current_season', 'Текущий сезон')) ?>">
+                        </label>
+                        <label>
+                            <span>Пустая доска — заголовок</span>
+                            <input type="text" name="cms_empty_title" id="cms-cms_empty_title" value="<?= e(setting_value($settings, 'cms_empty_title', 'Доска скоро откроется')) ?>">
+                        </label>
+                        <label>
+                            <span>Пустая доска — текст</span>
+                            <input type="text" name="cms_empty_subtitle" id="cms-cms_empty_subtitle" value="<?= e(setting_value($settings, 'cms_empty_subtitle', 'Первые награды появятся после занятий.')) ?>">
+                        </label>
+                        <label>
+                            <span>Очки (метка, напр. «очков»)</span>
+                            <input type="text" name="cms_leaderboard_label" id="cms-cms_leaderboard_label" value="<?= e(setting_value($settings, 'cms_leaderboard_label', 'очков')) ?>">
+                        </label>
+                        <label>
+                            <span>Место (метка, напр. «место»)</span>
+                            <input type="text" name="cms_rank_label" id="cms-cms_rank_label" value="<?= e(setting_value($settings, 'cms_rank_label', 'место')) ?>">
+                        </label>
+                    </div>
+
+                    <p class="settings-group-label">🎓 Кабинет ученика</p>
+                    <div class="form-grid two">
+                        <label>
+                            <span>Мои награды — заголовок</span>
+                            <input type="text" name="cms_my_awards_title" id="cms-cms_my_awards_title" value="<?= e(setting_value($settings, 'cms_my_awards_title', '🎖 Мои награды')) ?>">
+                        </label>
+                        <label>
+                            <span>Кнопка «Доска почёта»</span>
+                            <input type="text" name="cms_leaderboard_btn" id="cms-cms_leaderboard_btn" value="<?= e(setting_value($settings, 'cms_leaderboard_btn', '🏆 Посмотреть Доску почёта')) ?>">
+                        </label>
+                        <label>
+                            <span>Нет наград — заголовок</span>
+                            <input type="text" name="cms_no_awards_title" id="cms-cms_no_awards_title" value="<?= e(setting_value($settings, 'cms_no_awards_title', 'Пока нет наград')) ?>">
+                        </label>
+                        <label>
+                            <span>Нет наград — текст</span>
+                            <input type="text" name="cms_no_awards_sub" id="cms-cms_no_awards_sub" value="<?= e(setting_value($settings, 'cms_no_awards_sub', 'Продолжай стараться — скоро они появятся!')) ?>">
+                        </label>
+                    </div>
+
+                    <button class="button primary" type="submit">💾 Сохранить все настройки</button>
                 </form>
+
+                <div class="cms-preview-panel">
+                    <div class="cms-preview-header">
+                        <span>👁 Предпросмотр</span>
+                        <button type="button" class="button small" id="cms-refresh-preview">🔄 Обновить</button>
+                    </div>
+                    <iframe id="cms-preview-frame" src="index.php" title="Предпросмотр публичной страницы"></iframe>
+                </div>
+                </div><!-- /settings-layout -->
                 </div><!-- /section-body -->
             </section>
         </div>

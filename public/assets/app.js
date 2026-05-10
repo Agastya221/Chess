@@ -580,8 +580,25 @@
         });
     });
 
-    /* ── REWARD PICKER (admin) ── */
-    document.querySelectorAll('.reward-picker').forEach((picker) => {
+    /* ── REWARD PICKER (admin) — multi-select checkboxes ── */
+    document.querySelectorAll('.reward-picker-multi').forEach((picker) => {
+        const choices = picker.querySelectorAll('.reward-choice');
+        choices.forEach((choice) => {
+            const input = choice.querySelector('input[type="checkbox"]');
+            if (!input) return;
+            /* Toggle is-selected class based on checkbox state */
+            choice.addEventListener('click', () => {
+                /* Allow the click to propagate to the checkbox first */
+                requestAnimationFrame(() => {
+                    choice.classList.toggle('is-selected', input.checked);
+                    soundPop();
+                });
+            });
+        });
+    });
+
+    /* Legacy radio-based picker (keep for backwards compat) */
+    document.querySelectorAll('.reward-picker:not(.reward-picker-multi)').forEach((picker) => {
         const choices = picker.querySelectorAll('.reward-choice');
         choices.forEach((choice) => {
             const input = choice.querySelector('input[type="radio"]');
@@ -592,6 +609,98 @@
             });
         });
     });
+
+    /* ══════════════════════════════════════
+       ⚡ AJAX AWARD FORM SUBMISSION
+    ══════════════════════════════════════ */
+    function showToast(message, type) {
+        // Check if there's already a toast function, otherwise create one
+        const existing = document.querySelector('.toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = 'toast toast-' + (type || 'success');
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        function dismiss() {
+            toast.classList.add('toast-out');
+            toast.addEventListener('animationend', () => toast.remove(), { once: true });
+        }
+        const timer = setTimeout(dismiss, 4500);
+        toast.addEventListener('click', () => { clearTimeout(timer); dismiss(); });
+    }
+
+    const awardForm = document.querySelector('.award-form input[name="action"][value="add_award"]');
+    if (awardForm) {
+        const form = awardForm.closest('form');
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            /* Validate at least 1 student + 1 reward checked */
+            const studentChecks = form.querySelectorAll('.bulk-student-item input[type="checkbox"]:checked');
+            const rewardChecks  = form.querySelectorAll('.reward-picker-multi input[type="checkbox"]:checked');
+
+            if (studentChecks.length === 0) {
+                showToast('Выберите хотя бы одного ученика.', 'error');
+                return;
+            }
+            if (rewardChecks.length === 0) {
+                showToast('Выберите хотя бы одну награду.', 'error');
+                return;
+            }
+
+            const btn = form.querySelector('button[type="submit"]');
+            const origText = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Сохраняю...'; }
+
+            try {
+                const data = new FormData(form);
+                const resp = await fetch(form.action || window.location.href, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: data,
+                });
+
+                const json = await resp.json();
+
+                if (json.ok) {
+                    showToast('🎉 ' + json.message, 'success');
+                    soundCelebrate();
+                    burstParticles(window.innerWidth / 2, window.innerHeight / 3);
+
+                    /* Update student score badges in the bulk picker */
+                    if (json.updated_scores) {
+                        Object.entries(json.updated_scores).forEach(([sid, score]) => {
+                            const item = form.querySelector(`.bulk-student-item input[value="${sid}"]`);
+                            if (item) {
+                                const scoreEl = item.closest('.bulk-student-item')?.querySelector('.bulk-student-score');
+                                if (scoreEl) {
+                                    scoreEl.textContent = score + ' оч.';
+                                    scoreEl.style.transition = 'color .4s';
+                                    scoreEl.style.color = '#7c3aed';
+                                    setTimeout(() => { scoreEl.style.color = ''; }, 1500);
+                                }
+                            }
+                        });
+                    }
+
+                    /* Clear selections */
+                    form.querySelectorAll('.reward-picker-multi input[type="checkbox"]').forEach(cb => {
+                        cb.checked = false;
+                        cb.closest('.reward-choice')?.classList.remove('is-selected');
+                    });
+                } else {
+                    showToast('❌ ' + (json.message || 'Ошибка при сохранении.'), 'error');
+                    soundPop();
+                }
+            } catch (err) {
+                showToast('❌ Ошибка сети. Попробуйте ещё раз.', 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = origText; }
+            }
+        });
+    }
 
     /* ══════════════════════════════════════
        🔔 TOAST AUTO-DISMISS
@@ -623,13 +732,17 @@
         }, 700);
     }
 
+    /* ══════════════════════════════════════
+       ⬆️ BACK-TO-TOP BUTTON
+    ══════════════════════════════════════ */
     initRankProgressBar();
 
     /* ══════════════════════════════════════
        👥 BULK SELECT-ALL STUDENTS (admin)
     ══════════════════════════════════════ */
-    const selectAllBtn = document.getElementById('select-all-students');
-    if (selectAllBtn) {
+    (function initBulkSelect() {
+        const selectAllBtn = document.getElementById('select-all-students');
+        if (!selectAllBtn) return;
         let allSelected = false;
 
         selectAllBtn.addEventListener('click', () => {
@@ -640,6 +753,65 @@
             selectAllBtn.textContent = allSelected ? 'Снять всех' : 'Выбрать всех';
             soundPop();
         });
-    }
-})();
+    })();
 
+    (function initBackToTop() {
+
+        const btn = document.createElement('button');
+        btn.className = 'back-to-top';
+        btn.setAttribute('aria-label', 'Наверх');
+        btn.setAttribute('title', 'Наверх');
+        btn.innerHTML = '↑';
+        document.body.appendChild(btn);
+
+        function onScroll() {
+            if (window.scrollY > 320) {
+                btn.classList.add('visible');
+            } else {
+                btn.classList.remove('visible');
+            }
+        }
+
+        window.addEventListener('scroll', onScroll, { passive: true });
+        btn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            soundClick();
+        });
+    })();
+
+    /* ══════════════════════════════════════
+       👁 CMS LIVE PREVIEW (Settings page)
+    ══════════════════════════════════════ */
+    (function initCmsPreview() {
+        const frame = document.getElementById('cms-preview-frame');
+        const refreshBtn = document.getElementById('cms-refresh-preview');
+        const settingsForm = document.getElementById('cms-settings-form');
+        if (!frame || !settingsForm) return;
+
+        /* Refresh button */
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                frame.src = frame.src;
+            });
+        }
+
+        /* Debounce helper */
+        function debounce(fn, delay) {
+            let t;
+            return function(...args) {
+                clearTimeout(t);
+                t = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
+        /* On any input change, reload the preview after a short delay */
+        const reloadPreview = debounce(() => {
+            frame.src = 'index.php';
+        }, 1800);
+
+        settingsForm.querySelectorAll('input[type="text"], input[type="number"]').forEach(input => {
+            input.addEventListener('input', reloadPreview);
+        });
+    })();
+
+})();

@@ -84,7 +84,7 @@ try {
         <!-- ② Rank — full gamified level-up section -->
         <?php
         $allRanks = [
-            ['name' => 'Пешка',         'icon' => '♙', 'emoji' => '🌱', 'min' => 0],
+            ['name' => 'Пешка',         'icon' => '♙', 'emoji' => '♟', 'min' => 0],
             ['name' => 'Конь',          'icon' => '♘', 'emoji' => '🐴', 'min' => 51],
             ['name' => 'Офицер',        'icon' => '♗', 'emoji' => '⚔️',  'min' => 151],
             ['name' => 'Ладья',         'icon' => '♖', 'emoji' => '🏰', 'min' => 301],
@@ -164,13 +164,13 @@ try {
 
         <!-- ③ Awards history -->
         <section class="student-section">
-            <h2 class="student-section-title">🎖 Мои награды</h2>
+        <h2 class="student-section-title"><?= e(setting_value($settings, 'cms_my_awards_title', '🎖 Мои награды')) ?></h2>
 
             <?php if ($awards === []): ?>
                 <div class="empty-state">
-                    <div class="empty-piece">♙</div>
-                    <h2>Пока нет наград</h2>
-                    <p>Продолжай стараться — скоро они появятся!</p>
+                    <div class="empty-piece">♟</div>
+                    <h2><?= e(setting_value($settings, 'cms_no_awards_title', 'Пока нет наград')) ?></h2>
+                    <p><?= e(setting_value($settings, 'cms_no_awards_sub', 'Продолжай стараться — скоро они появятся!')) ?></p>
                 </div>
             <?php else: ?>
                 <div class="awards-timeline">
@@ -194,7 +194,7 @@ try {
         <!-- ④ Quick link to leaderboard -->
         <section class="student-section" style="text-align:center;padding:30px 0">
             <a class="button primary" href="index.php" style="font-size:18px;padding:14px 32px">
-                🏆 Посмотреть Доску почёта
+                <?= e(setting_value($settings, 'cms_leaderboard_btn', '🏆 Посмотреть Доску почёта')) ?>
             </a>
         </section>
     </main>

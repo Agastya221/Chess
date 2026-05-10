@@ -280,7 +280,7 @@ function all_seasons(): array
 function get_student_rank(int $score): array
 {
     $ranks = [
-        ['name' => 'Пешка',        'icon' => '♙', 'emoji' => '🌱', 'min' => 0],
+        ['name' => 'Пешка',        'icon' => '♙', 'emoji' => '♟', 'min' => 0],
         ['name' => 'Конь',         'icon' => '♘', 'emoji' => '🐴', 'min' => 51],
         ['name' => 'Офицер',       'icon' => '♗', 'emoji' => '⚔️',  'min' => 151],
         ['name' => 'Ладья',        'icon' => '♖', 'emoji' => '🏰', 'min' => 301],

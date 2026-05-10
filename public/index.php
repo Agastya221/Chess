@@ -51,7 +51,7 @@ $isArchive  = $viewSeason !== null && (isset($season['id']) ? (int) $viewSeason[
             <?php if (count($allSeasons) > 1): ?>
                 <form method="get" class="season-select-form">
                     <select name="season" class="season-select" onchange="this.form.submit()" title="Выбрать сезон">
-                        <option value="">📅 Текущий сезон</option>
+                        <option value="">📅 <?= e(setting_value($settings, 'cms_current_season', 'Текущий сезон')) ?></option>
                         <?php foreach ($allSeasons as $s): ?>
                             <?php if ($season && (int) $s['id'] === (int) $season['id']) continue; ?>
                             <option value="<?= (int) $s['id'] ?>" <?= $viewSeasonId === (int) $s['id'] ? 'selected' : '' ?>>
@@ -61,7 +61,7 @@ $isArchive  = $viewSeason !== null && (isset($season['id']) ? (int) $viewSeason[
                     </select>
                 </form>
             <?php endif; ?>
-            <a class="header-btn" href="login.php">Вход</a>
+            <a class="header-btn" href="login.php"><?= e(setting_value($settings, 'cms_login_btn', 'Вход')) ?></a>
         </div>
         <div class="public-hero">
             <div class="brand-mark">♚</div>
@@ -85,8 +85,8 @@ $isArchive  = $viewSeason !== null && (isset($season['id']) ? (int) $viewSeason[
         <?php if ($leaders === []): ?>
             <section class="empty-state">
                 <div class="empty-piece">♙</div>
-                <h2><?= $isArchive ? 'Нет данных за этот сезон' : 'Доска скоро откроется' ?></h2>
-                <p><?= $isArchive ? 'Награды за этот период не найдены.' : 'Первые награды появятся после занятий.' ?></p>
+                <h2><?= $isArchive ? 'Нет данных за этот сезон' : e(setting_value($settings, 'cms_empty_title', 'Доска скоро откроется')) ?></h2>
+                <p><?= $isArchive ? 'Награды за этот период не найдены.' : e(setting_value($settings, 'cms_empty_subtitle', 'Первые награды появятся после занятий.')) ?></p>
             </section>
         <?php else: ?>
             <ol class="leaderboard">
@@ -103,12 +103,12 @@ $isArchive  = $viewSeason !== null && (isset($season['id']) ? (int) $viewSeason[
                     <li class="leader-card <?= e($placeClass) ?>">
                         <div class="rank-box">
                             <span class="rank-number"><?= $place ?></span>
-                            <span class="rank-label">место</span>
+                            <span class="rank-label"><?= e(setting_value($settings, 'cms_rank_label', 'место')) ?></span>
                         </div>
                         <div class="avatar-ring" aria-hidden="true"><?= e($leader['avatar']) ?></div>
                         <div class="leader-copy">
                             <h2><?= e($leader['public_name']) ?></h2>
-                            <p><?= (int) $leader['score'] ?> очков</p>
+                            <p><?= (int) $leader['score'] ?> <?= e(setting_value($settings, 'cms_leaderboard_label', 'очков')) ?></p>
                         </div>
                     </li>
                 <?php endforeach; ?>
