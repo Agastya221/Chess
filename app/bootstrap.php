@@ -107,8 +107,8 @@ function verify_csrf(): void
     $token = $_POST['csrf_token'] ?? '';
 
     if (!is_string($token) || !hash_equals(csrf_token(), $token)) {
-        http_response_code(419);
-        exit('Сессия устарела. Обновите страницу и попробуйте снова.');
+        flash('error', 'Сессия устарела. Пожалуйста, войдите снова.');
+        redirect_to('login.php');
     }
 }
 
@@ -232,16 +232,18 @@ function setting_value(array $settings, string $key, string $default = ''): stri
     return isset($settings[$key]) ? (string) $settings[$key] : $default;
 }
 
-function leaderboard_top(int $limit = 5): array
+function leaderboard_top(int $limit = 5, ?int $seasonId = null): array
 {
     if (!table_exists('students') || !table_exists('awards')) {
         return [];
     }
 
-    $season = active_season();
-
-    if (!$season) {
-        return [];
+    if ($seasonId === null) {
+        $season = active_season();
+        if (!$season) {
+            return [];
+        }
+        $seasonId = (int) $season['id'];
     }
 
     $statement = db()->prepare(
@@ -258,9 +260,84 @@ function leaderboard_top(int $limit = 5): array
          LIMIT ' . max(1, min(10, $limit))
     );
 
-    $statement->execute(['season_id' => (int) $season['id']]);
+    $statement->execute(['season_id' => $seasonId]);
 
     return $statement->fetchAll();
+}
+
+function all_seasons(): array
+{
+    if (!table_exists('seasons')) {
+        return [];
+    }
+    return db()->query('SELECT * FROM seasons ORDER BY starts_on DESC, id DESC')->fetchAll();
+}
+
+/**
+ * Returns chess-themed rank info for a given point score.
+ * Returns: current rank, next rank, progress % to next rank, points needed.
+ */
+function get_student_rank(int $score): array
+{
+    $ranks = [
+        ['name' => 'Пешка',        'icon' => '♙', 'emoji' => '🌱', 'min' => 0],
+        ['name' => 'Конь',         'icon' => '♘', 'emoji' => '🐴', 'min' => 51],
+        ['name' => 'Офицер',       'icon' => '♗', 'emoji' => '⚔️',  'min' => 151],
+        ['name' => 'Ладья',        'icon' => '♖', 'emoji' => '🏰', 'min' => 301],
+        ['name' => 'Ферзь',        'icon' => '♕', 'emoji' => '👑', 'min' => 501],
+        ['name' => 'Гроссмейстер','icon' => '♔', 'emoji' => '🌟', 'min' => 751],
+    ];
+
+    $current = $ranks[0];
+    $next    = $ranks[1];
+
+    foreach ($ranks as $i => $rank) {
+        if ($score >= $rank['min']) {
+            $current = $rank;
+            $next    = $ranks[$i + 1] ?? null;
+        }
+    }
+
+    $progress     = 100;
+    $pointsToNext = 0;
+
+    if ($next !== null) {
+        $range        = $next['min'] - $current['min'];
+        $earned       = $score - $current['min'];
+        $progress     = $range > 0 ? (int) min(100, round($earned / $range * 100)) : 100;
+        $pointsToNext = max(0, $next['min'] - $score);
+    }
+
+    return [
+        'current'       => $current,
+        'next'          => $next,
+        'progress'      => $progress,
+        'points_to_next'=> $pointsToNext,
+    ];
+}
+
+/**
+ * Returns 1-based leaderboard position of a student (0 = not ranked).
+ */
+function student_rank_in_leaderboard(int $studentId, int $seasonId): int
+{
+    $statement = db()->prepare(
+        'SELECT student_id
+         FROM awards
+         WHERE season_id = :season_id
+         GROUP BY student_id
+         ORDER BY SUM(points) DESC, COUNT(*) DESC'
+    );
+    $statement->execute(['season_id' => $seasonId]);
+    $rows = $statement->fetchAll();
+
+    foreach ($rows as $i => $row) {
+        if ((int) $row['student_id'] === $studentId) {
+            return $i + 1;
+        }
+    }
+
+    return 0;
 }
 
 /* ── Student Authentication ── */

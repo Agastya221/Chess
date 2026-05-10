@@ -161,21 +161,29 @@ function toggle_student_action(): void
 
 function add_award_action(int $adminId): void
 {
-    $studentId = post_int('student_id');
+    /* Support bulk awarding: student_ids[] array OR legacy single student_id */
+    $studentIds = [];
+
+    if (!empty($_POST['student_ids']) && is_array($_POST['student_ids'])) {
+        foreach ($_POST['student_ids'] as $raw) {
+            $id = (int) $raw;
+            if ($id > 0) $studentIds[] = $id;
+        }
+    } elseif (post_int('student_id') > 0) {
+        $studentIds[] = post_int('student_id');
+    }
+
+    if ($studentIds === []) {
+        throw new InvalidArgumentException('Выберите хотя бы одного ученика.');
+    }
+
     $rewardTypeId = post_int('reward_type_id');
-    $note = post_string('note', 1000) ?: null;
-    $lessonDate = clean_date((string) ($_POST['lesson_date'] ?? ''), date('Y-m-d'));
-    $season = active_season();
+    $note         = post_string('note', 1000) ?: null;
+    $lessonDate   = clean_date((string) ($_POST['lesson_date'] ?? ''), date('Y-m-d'));
+    $season       = active_season();
 
     if (!$season) {
         throw new InvalidArgumentException('Создайте активный сезон.');
-    }
-
-    $studentStatement = db()->prepare('SELECT id FROM students WHERE id = :id AND is_active = 1 LIMIT 1');
-    $studentStatement->execute(['id' => $studentId]);
-
-    if (!$studentStatement->fetch()) {
-        throw new InvalidArgumentException('Выберите активного ученика.');
     }
 
     $rewardStatement = db()->prepare('SELECT * FROM reward_types WHERE id = :id AND is_active = 1 LIMIT 1');
@@ -186,26 +194,39 @@ function add_award_action(int $adminId): void
         throw new InvalidArgumentException('Выберите активную награду.');
     }
 
-    $statement = db()->prepare(
+    $insertStatement = db()->prepare(
         'INSERT INTO awards
             (student_id, reward_type_id, season_id, title, icon, points, note, lesson_date, created_by)
          VALUES
             (:student_id, :reward_type_id, :season_id, :title, :icon, :points, :note, :lesson_date, :created_by)'
     );
 
-    $statement->execute([
-        'student_id' => $studentId,
-        'reward_type_id' => (int) $reward['id'],
-        'season_id' => (int) $season['id'],
-        'title' => (string) $reward['title'],
-        'icon' => (string) $reward['icon'],
-        'points' => (int) $reward['points'],
-        'note' => $note,
-        'lesson_date' => $lessonDate,
-        'created_by' => $adminId,
-    ]);
+    db()->beginTransaction();
+    $count = 0;
 
-    flash('success', 'Награда выдана.');
+    foreach ($studentIds as $studentId) {
+        /* Verify student exists and is active */
+        $check = db()->prepare('SELECT id FROM students WHERE id = :id AND is_active = 1 LIMIT 1');
+        $check->execute(['id' => $studentId]);
+        if (!$check->fetch()) continue;
+
+        $insertStatement->execute([
+            'student_id'     => $studentId,
+            'reward_type_id' => (int) $reward['id'],
+            'season_id'      => (int) $season['id'],
+            'title'          => (string) $reward['title'],
+            'icon'           => (string) $reward['icon'],
+            'points'         => (int) $reward['points'],
+            'note'           => $note,
+            'lesson_date'    => $lessonDate,
+            'created_by'     => $adminId,
+        ]);
+        $count++;
+    }
+
+    db()->commit();
+
+    flash('success', 'Награда выдана ' . $count . ' ученикам из ' . count($studentIds) . '.');
     redirect_to('admin.php#award');
 }
 
@@ -476,26 +497,26 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
 <body class="admin-page">
     <header class="admin-topbar">
         <div>
-            <p class="eyebrow">Кабинет</p>
-            <h1>Здравствуйте, <?= e($admin['display_name'] ?? 'Учитель') ?></h1>
+            <p class="eyebrow">Кабинет учителя</p>
+            <h1>👋 <?= e($admin['display_name'] ?? 'Учитель') ?></h1>
         </div>
         <nav class="admin-actions" aria-label="Навигация">
-            <a class="button ghost" href="index.php">♚ Доска</a>
+            <a class="button ghost" href="index.php">♚ Доска почёта</a>
             <form method="post" action="logout.php">
                 <?= csrf_field() ?>
-                <button class="button ghost" type="submit">Выйти</button>
+                <button class="button ghost" type="submit">Выйти →</button>
             </form>
         </nav>
     </header>
 
     <main class="admin-shell">
         <aside class="admin-nav" aria-label="Разделы">
-            <a href="#award">Награда</a>
-            <a href="#students">Ученики</a>
-            <a href="#history">История</a>
-            <a href="#rewards">Типы</a>
-            <a href="#seasons">Сезоны</a>
-            <a href="#settings">Настройки</a>
+            <a href="#award">🏅 Награда</a>
+            <a href="#students">🎓 Ученики</a>
+            <a href="#history">📋 История</a>
+            <a href="#rewards">⭐ Типы наград</a>
+            <a href="#seasons">📅 Сезоны</a>
+            <a href="#settings">⚙️ Настройки</a>
         </aside>
 
         <div class="admin-content">
@@ -505,47 +526,59 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
 
             <section class="stats-grid" aria-label="Статистика">
                 <article class="stat-card">
-                    <span>Ученики</span>
+                    <div class="stat-icon">🎓</div>
+                    <span>Активных учеников</span>
                     <strong><?= (int) ($stats['active_students'] ?? 0) ?></strong>
                 </article>
                 <article class="stat-card">
-                    <span>Награды</span>
+                    <div class="stat-icon">🏅</div>
+                    <span>Наград за сезон</span>
                     <strong><?= (int) ($stats['season_awards'] ?? 0) ?></strong>
                 </article>
-                <article class="stat-card accent">
-                    <span>Очки сезона</span>
+                <article class="stat-card">
+                    <div class="stat-icon">⭐</div>
+                    <span>Очков за сезон</span>
                     <strong><?= (int) ($stats['season_points'] ?? 0) ?></strong>
                 </article>
             </section>
 
             <section class="admin-section" id="award">
                 <div class="section-heading">
-                    <div>
-                        <p class="eyebrow"><?= $season ? e($season['title']) : 'Сезон не выбран' ?></p>
-                        <h2>Выдать награду</h2>
+                    <div class="section-header-inner">
+                        <div class="section-icon purple">🏅</div>
+                        <div>
+                            <p class="eyebrow"><?= $season ? e($season['title']) : 'Сезон не выбран' ?></p>
+                            <h2>Выдать награду</h2>
+                        </div>
                     </div>
                 </div>
-
+                <div class="section-body">
                 <form method="post" class="award-form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="add_award">
 
                     <div class="form-grid two">
                         <label>
-                            <span>Ученик</span>
-                            <select name="student_id" required>
-                                <option value="">Выберите</option>
-                                <?php foreach ($activeStudents as $student): ?>
-                                    <option value="<?= (int) $student['id'] ?>">
-                                        <?= e($student['private_name']) ?> · <?= e($student['public_name']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </label>
-                        <label>
                             <span>Дата урока</span>
                             <input type="date" name="lesson_date" value="<?= e(date('Y-m-d')) ?>" required>
                         </label>
+                        <div></div>
+                    </div>
+
+                    <!-- Bulk student checkboxes -->
+                    <div class="bulk-student-header">
+                        <span class="bulk-label">Ученики <small>(выбери одного или нескольких)</small></span>
+                        <button type="button" class="button small" id="select-all-students">Выбрать всех</button>
+                    </div>
+                    <div class="bulk-student-grid">
+                        <?php foreach ($activeStudents as $student): ?>
+                            <label class="bulk-student-item">
+                                <input type="checkbox" name="student_ids[]" value="<?= (int) $student['id'] ?>">
+                                <span class="bulk-student-avatar"><?= e($student['avatar']) ?></span>
+                                <span class="bulk-student-name"><?= e($student['private_name']) ?></span>
+                                <span class="bulk-student-score"><?= (int) $student['score'] ?> очков</span>
+                            </label>
+                        <?php endforeach; ?>
                     </div>
 
                     <div class="reward-picker" role="radiogroup" aria-label="Тип награды">
@@ -568,16 +601,20 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                         ♕ Выдать награду
                     </button>
                 </form>
+                </div><!-- /section-body -->
             </section>
 
             <section class="admin-section" id="students">
                 <div class="section-heading">
-                    <div>
-                        <p class="eyebrow">Список</p>
-                        <h2>Ученики</h2>
+                    <div class="section-header-inner">
+                        <div class="section-icon green">🎓</div>
+                        <div>
+                            <p class="eyebrow">Управление</p>
+                            <h2>Ученики</h2>
+                        </div>
                     </div>
                 </div>
-
+                <div class="section-body">
                 <form method="post" class="compact-form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="add_student">
@@ -666,16 +703,20 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                         </article>
                     <?php endforeach; ?>
                 </div>
+                </div><!-- /section-body -->
             </section>
 
             <section class="admin-section" id="history">
                 <div class="section-heading">
-                    <div>
-                        <p class="eyebrow">Последние записи</p>
-                        <h2>История наград</h2>
+                    <div class="section-header-inner">
+                        <div class="section-icon blue">📋</div>
+                        <div>
+                            <p class="eyebrow">Последние 30 записей</p>
+                            <h2>История наград</h2>
+                        </div>
                     </div>
                 </div>
-
+                <div class="section-body">
                 <div class="item-list">
                     <?php if ($recentAwards === []): ?>
                         <p class="soft-text">Пока нет наград.</p>
@@ -723,16 +764,20 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                         </article>
                     <?php endforeach; ?>
                 </div>
+                </div><!-- /section-body -->
             </section>
 
             <section class="admin-section" id="rewards">
                 <div class="section-heading">
-                    <div>
-                        <p class="eyebrow">Шаблоны</p>
-                        <h2>Типы наград</h2>
+                    <div class="section-header-inner">
+                        <div class="section-icon orange">⭐</div>
+                        <div>
+                            <p class="eyebrow">Шаблоны</p>
+                            <h2>Типы наград</h2>
+                        </div>
                     </div>
                 </div>
-
+                <div class="section-body">
                 <form method="post" class="compact-form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="add_reward_type">
@@ -826,16 +871,20 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                         </article>
                     <?php endforeach; ?>
                 </div>
+                </div><!-- /section-body -->
             </section>
 
             <section class="admin-section" id="seasons">
                 <div class="section-heading">
-                    <div>
-                        <p class="eyebrow">Периоды</p>
-                        <h2>Сезоны</h2>
+                    <div class="section-header-inner">
+                        <div class="section-icon pink">📅</div>
+                        <div>
+                            <p class="eyebrow">Периоды</p>
+                            <h2>Сезоны</h2>
+                        </div>
                     </div>
                 </div>
-
+                <div class="section-body">
                 <form method="post" class="compact-form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="add_season">
@@ -878,16 +927,20 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                         </article>
                     <?php endforeach; ?>
                 </div>
+                </div><!-- /section-body -->
             </section>
 
             <section class="admin-section" id="settings">
                 <div class="section-heading">
-                    <div>
-                        <p class="eyebrow">Публичная страница</p>
-                        <h2>Настройки</h2>
+                    <div class="section-header-inner">
+                        <div class="section-icon purple">⚙️</div>
+                        <div>
+                            <p class="eyebrow">Публичная страница</p>
+                            <h2>Настройки</h2>
+                        </div>
                     </div>
                 </div>
-
+                <div class="section-body">
                 <form method="post" class="form-stack settings-form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="update_settings">
@@ -909,6 +962,7 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
                     </label>
                     <button class="button primary" type="submit">Сохранить</button>
                 </form>
+                </div><!-- /section-body -->
             </section>
         </div>
     </main>

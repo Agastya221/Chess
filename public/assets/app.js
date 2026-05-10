@@ -592,4 +592,54 @@
             });
         });
     });
+
+    /* ══════════════════════════════════════
+       🔔 TOAST AUTO-DISMISS
+    ══════════════════════════════════════ */
+    function dismissToast(toast) {
+        toast.classList.add('toast-out');
+        toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    }
+
+    document.querySelectorAll('.toast').forEach((toast) => {
+        /* Auto-dismiss after 4 seconds */
+        const timer = setTimeout(() => dismissToast(toast), 4000);
+        /* Click to dismiss early */
+        toast.addEventListener('click', () => { clearTimeout(timer); dismissToast(toast); });
+    });
+
+    /* ══════════════════════════════════════
+       📊 RANK PROGRESS BAR ANIMATION
+    ══════════════════════════════════════ */
+    function initRankProgressBar() {
+        const fill = document.querySelector('.rank-xp-fill');
+        if (!fill) return;
+
+        const target = parseFloat(fill.dataset.target || '0');
+
+        /* Animate after a short delay so user sees the bar grow */
+        setTimeout(() => {
+            fill.style.width = target + '%';
+        }, 700);
+    }
+
+    initRankProgressBar();
+
+    /* ══════════════════════════════════════
+       👥 BULK SELECT-ALL STUDENTS (admin)
+    ══════════════════════════════════════ */
+    const selectAllBtn = document.getElementById('select-all-students');
+    if (selectAllBtn) {
+        let allSelected = false;
+
+        selectAllBtn.addEventListener('click', () => {
+            allSelected = !allSelected;
+            document.querySelectorAll('.bulk-student-item input[type="checkbox"]').forEach((cb) => {
+                cb.checked = allSelected;
+            });
+            selectAllBtn.textContent = allSelected ? 'Снять всех' : 'Выбрать всех';
+            soundPop();
+        });
+    }
 })();
+

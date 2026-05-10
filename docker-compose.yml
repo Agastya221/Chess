@@ -6,7 +6,7 @@ services:
     environment:
       APP_ENV: local
       APP_DEBUG: "true"
-      APP_URL: http://localhost:8080
+      APP_URL: ""
       APP_TIMEZONE: Europe/Moscow
       SESSION_NAME: chess_rewards_local
       DB_HOST: db
@@ -46,4 +46,3 @@ services:
 
 volumes:
   chess_mysql_data:
-

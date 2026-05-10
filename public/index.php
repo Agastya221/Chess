@@ -4,17 +4,34 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/app/bootstrap.php';
 
 try {
-    $settings = app_settings();
-    $season = active_season();
-    $limit = (int) setting_value($settings, 'leaderboard_limit', '5');
-    $leaders = leaderboard_top($limit);
+    $settings   = app_settings();
+    $allSeasons = all_seasons();
+    $season     = active_season();
+
+    /* Allow viewing past seasons via ?season=ID */
+    $viewSeasonId = isset($_GET['season']) ? (int) $_GET['season'] : null;
+    $viewSeason   = null;
+
+    if ($viewSeasonId !== null) {
+        foreach ($allSeasons as $s) {
+            if ((int) $s['id'] === $viewSeasonId) {
+                $viewSeason = $s;
+                break;
+            }
+        }
+    }
+
+    $displaySeason = $viewSeason ?? $season;
+    $limit         = (int) setting_value($settings, 'leaderboard_limit', '5');
+    $leaders       = $displaySeason ? leaderboard_top($limit, (int) $displaySeason['id']) : [];
 } catch (Throwable $exception) {
     render_error_page($exception);
 }
 
 $schoolName = setting_value($settings, 'school_name', 'Юные шахматисты');
-$title = setting_value($settings, 'public_title', 'Шахматная доска почёта');
-$subtitle = setting_value($settings, 'public_subtitle', 'Лучшие результаты сезона');
+$title      = setting_value($settings, 'public_title', 'Шахматная доска почёта');
+$subtitle   = setting_value($settings, 'public_subtitle', 'Лучшие результаты сезона');
+$isArchive  = $viewSeason !== null && (isset($season['id']) ? (int) $viewSeason['id'] !== (int) $season['id'] : true);
 ?>
 <!doctype html>
 <html lang="ru">
@@ -31,6 +48,19 @@ $subtitle = setting_value($settings, 'public_subtitle', 'Лучшие резул
 <body class="public-page">
     <header class="public-header">
         <div class="public-header-nav">
+            <?php if (count($allSeasons) > 1): ?>
+                <form method="get" class="season-select-form">
+                    <select name="season" class="season-select" onchange="this.form.submit()" title="Выбрать сезон">
+                        <option value="">📅 Текущий сезон</option>
+                        <?php foreach ($allSeasons as $s): ?>
+                            <?php if ($season && (int) $s['id'] === (int) $season['id']) continue; ?>
+                            <option value="<?= (int) $s['id'] ?>" <?= $viewSeasonId === (int) $s['id'] ? 'selected' : '' ?>>
+                                🏛 <?= e($s['title']) ?> (<?= e($s['starts_on']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </form>
+            <?php endif; ?>
             <a class="header-btn" href="login.php">Вход</a>
         </div>
         <div class="public-hero">
@@ -38,8 +68,15 @@ $subtitle = setting_value($settings, 'public_subtitle', 'Лучшие резул
             <p class="eyebrow"><?= e($schoolName) ?></p>
             <h1><?= e($title) ?></h1>
             <p class="subtitle"><?= e($subtitle) ?></p>
-            <?php if ($season): ?>
-                <span class="season-pill"><?= e($season['title']) ?></span>
+            <?php if ($displaySeason): ?>
+                <span class="season-pill <?= $isArchive ? 'archive-pill' : '' ?>">
+                    <?= $isArchive ? '🏛 ' : '' ?><?= e($displaySeason['title']) ?>
+                </span>
+            <?php endif; ?>
+            <?php if ($isArchive): ?>
+                <p style="margin-top:12px">
+                    <a href="index.php" class="header-btn" style="display:inline-flex">← Вернуться к текущему</a>
+                </p>
             <?php endif; ?>
         </div>
     </header>
@@ -48,8 +85,8 @@ $subtitle = setting_value($settings, 'public_subtitle', 'Лучшие резул
         <?php if ($leaders === []): ?>
             <section class="empty-state">
                 <div class="empty-piece">♙</div>
-                <h2>Доска скоро откроется</h2>
-                <p>Первые награды появятся после занятий.</p>
+                <h2><?= $isArchive ? 'Нет данных за этот сезон' : 'Доска скоро откроется' ?></h2>
+                <p><?= $isArchive ? 'Награды за этот период не найдены.' : 'Первые награды появятся после занятий.' ?></p>
             </section>
         <?php else: ?>
             <ol class="leaderboard">
@@ -81,4 +118,3 @@ $subtitle = setting_value($settings, 'public_subtitle', 'Лучшие резул
     <script src="assets/app.js" defer></script>
 </body>
 </html>
-
