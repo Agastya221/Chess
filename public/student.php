@@ -84,7 +84,7 @@ try {
         <!-- ② Rank — full gamified level-up section -->
         <?php
         $allRanks = [
-            ['name' => 'Пешка',         'icon' => '♙', 'emoji' => '♟', 'min' => 0],
+            ['name' => 'Пешка',         'icon' => '♙', 'emoji' => '🏹', 'min' => 0],
             ['name' => 'Конь',          'icon' => '♘', 'emoji' => '🐴', 'min' => 51],
             ['name' => 'Офицер',        'icon' => '♗', 'emoji' => '⚔️',  'min' => 151],
             ['name' => 'Ладья',         'icon' => '♖', 'emoji' => '🏰', 'min' => 301],
@@ -162,13 +162,19 @@ try {
 
         </section>
 
-        <!-- ③ Awards history -->
+        <!-- ① Awards history -->
         <section class="student-section">
-        <h2 class="student-section-title"><?= e(setting_value($settings, 'cms_my_awards_title', '🎖 Мои награды')) ?></h2>
+        <div class="awards-section-header">
+            <div class="awards-section-label">
+                <span class="awards-section-icon">&#127894;</span>
+                <span><?= e(setting_value($settings, 'cms_my_awards_title_text', 'Мои награды')) ?></span>
+            </div>
+            <span class="awards-count-badge"><?= count($awards) ?></span>
+        </div>
 
             <?php if ($awards === []): ?>
                 <div class="empty-state">
-                    <div class="empty-piece">♟</div>
+                    <div class="empty-piece" style="font-size:48px">🏹</div>
                     <h2><?= e(setting_value($settings, 'cms_no_awards_title', 'Пока нет наград')) ?></h2>
                     <p><?= e(setting_value($settings, 'cms_no_awards_sub', 'Продолжай стараться — скоро они появятся!')) ?></p>
                 </div>

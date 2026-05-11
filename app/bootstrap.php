@@ -57,9 +57,10 @@ function db(): PDO
     $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=%s', $host, $port, $database, $charset);
 
     $pdo = new PDO($dsn, (string) config_value('database.username'), (string) config_value('database.password'), [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
     ]);
 
     return $pdo;
@@ -280,7 +281,7 @@ function all_seasons(): array
 function get_student_rank(int $score): array
 {
     $ranks = [
-        ['name' => 'Пешка',        'icon' => '♙', 'emoji' => '♟', 'min' => 0],
+        ['name' => 'Пешка',        'icon' => '♙', 'emoji' => '🏹', 'min' => 0],
         ['name' => 'Конь',         'icon' => '♘', 'emoji' => '🐴', 'min' => 51],
         ['name' => 'Офицер',       'icon' => '♗', 'emoji' => '⚔️',  'min' => 151],
         ['name' => 'Ладья',        'icon' => '♖', 'emoji' => '🏰', 'min' => 301],

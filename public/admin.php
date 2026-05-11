@@ -582,13 +582,41 @@ $avatarOptions = ['♟', '♞', '♝', '♜', '♛', '♚', '♙', '♘', '♗',
 
     <main class="admin-shell">
         <aside class="admin-nav" aria-label="Разделы">
-            <a href="#award">🏅 Награда</a>
-            <a href="#students">🎓 Ученики</a>
-            <a href="#history">📋 История</a>
-            <a href="#rewards">⭐ Типы наград</a>
-            <a href="#seasons">📅 Сезоны</a>
-            <a href="#settings">⚙️ Настройки</a>
+            <a href="#award">&#127885; Награда</a>
+            <a href="#students">&#127891; Ученики</a>
+            <a href="#history">&#128203; История</a>
+            <a href="#rewards">&#11088; Награды</a>
+            <a href="#seasons">&#128197; Сезоны</a>
+            <a href="#settings">&#9881; Настройки</a>
         </aside>
+
+        <!-- Mobile bottom tab bar (phones only) -->
+        <nav class="mobile-tab-bar" id="mobile-tab-bar" aria-label="Мобильная навигация">
+            <button class="mobile-tab active" data-target="award">
+                <span class="mobile-tab-icon">&#127885;</span>
+                <span class="mobile-tab-label">Награда</span>
+            </button>
+            <button class="mobile-tab" data-target="students">
+                <span class="mobile-tab-icon">&#127891;</span>
+                <span class="mobile-tab-label">Ученики</span>
+            </button>
+            <button class="mobile-tab" data-target="history">
+                <span class="mobile-tab-icon">&#128203;</span>
+                <span class="mobile-tab-label">История</span>
+            </button>
+            <button class="mobile-tab" data-target="rewards">
+                <span class="mobile-tab-icon">&#11088;</span>
+                <span class="mobile-tab-label">Награды</span>
+            </button>
+            <button class="mobile-tab" data-target="seasons">
+                <span class="mobile-tab-icon">&#128197;</span>
+                <span class="mobile-tab-label">Сезоны</span>
+            </button>
+            <button class="mobile-tab" data-target="settings">
+                <span class="mobile-tab-icon">&#9881;</span>
+                <span class="mobile-tab-label">Настройки</span>
+            </button>
+        </nav>
 
         <div class="admin-content">
             <?php foreach (consume_flash() as $message): ?>

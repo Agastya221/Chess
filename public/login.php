@@ -120,11 +120,11 @@ try {
             <!-- Role chooser tabs -->
             <div class="login-tabs" id="login-tabs">
                 <button class="login-tab active" data-tab="teacher" id="tab-teacher">
-                    <span class="tab-icon">👨‍🏫</span>
+                    <span class="tab-icon">&#128104;&#8205;&#128203;</span>
                     <span>Я учитель</span>
                 </button>
                 <button class="login-tab" data-tab="student" id="tab-student">
-                    <span class="tab-icon">🎓</span>
+                    <span class="tab-icon">&#127891;</span>
                     <span>Я ученик</span>
                 </button>
             </div>
@@ -157,7 +157,7 @@ try {
                            autocomplete="off" required maxlength="32"
                            style="text-align:center; font-size:22px; font-weight:800; letter-spacing:4px">
                 </label>
-                <button class="button primary full" type="submit">🚀 Войти</button>
+                <button class="button primary full" type="submit">&#128640; Войти</button>
             </form>
         <?php endif; ?>
     </main>

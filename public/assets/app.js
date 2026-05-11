@@ -733,6 +733,57 @@
     }
 
     /* ══════════════════════════════════════
+       📱 MOBILE BOTTOM TAB SWITCHING
+    ══════════════════════════════════════ */
+    (function initMobileTabs() {
+        const tabBar = document.getElementById('mobile-tab-bar');
+        if (!tabBar) return;
+
+        const tabs = tabBar.querySelectorAll('.mobile-tab');
+        const sections = document.querySelectorAll('.admin-section');
+
+        function isMobile() { return window.innerWidth <= 768; }
+
+        function activateTab(targetId) {
+            tabs.forEach(t => t.classList.remove('active'));
+            sections.forEach(s => s.classList.remove('mobile-active'));
+
+            const activeTab = tabBar.querySelector(`[data-target="${targetId}"]`);
+            const activeSection = document.getElementById(targetId);
+
+            activeTab?.classList.add('active');
+            activeSection?.classList.add('mobile-active');
+
+            /* Scroll content to top when switching tabs */
+            const content = document.querySelector('.admin-content');
+            if (content) content.scrollTop = 0;
+            window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+
+        function setup() {
+            if (!isMobile()) {
+                /* Desktop: remove mobile-active, show all sections normally */
+                sections.forEach(s => s.classList.remove('mobile-active'));
+                return;
+            }
+            /* Mobile: activate first tab by default */
+            const firstTarget = tabs[0]?.dataset.target || 'award';
+            activateTab(firstTarget);
+        }
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                if (!isMobile()) return;
+                activateTab(tab.dataset.target);
+                soundClick();
+            });
+        });
+
+        setup();
+        window.addEventListener('resize', setup, { passive: true });
+    })();
+
+    /* ══════════════════════════════════════
        ⬆️ BACK-TO-TOP BUTTON
     ══════════════════════════════════════ */
     initRankProgressBar();

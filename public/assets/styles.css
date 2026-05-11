@@ -1623,3 +1623,152 @@ summary::-webkit-details-marker { display: none; }
         font-size: 13px;
     }
 }
+
+/* ══════════════════════════════════════
+   📱 MOBILE BOTTOM TAB NAVIGATION
+══════════════════════════════════════ */
+.mobile-tab-bar { display: none; }
+
+@media (max-width: 768px) {
+    /* Show mobile tab bar */
+    .mobile-tab-bar {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 62px;
+        background: linear-gradient(180deg, #1e1b4b 0%, #0f0c29 100%);
+        border-top: 1px solid rgba(255,255,255,.1);
+        box-shadow: 0 -6px 24px rgba(0,0,0,.4);
+        z-index: 500;
+        align-items: stretch;
+    }
+
+    .mobile-tab {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        background: none;
+        border: none;
+        color: rgba(255,255,255,.45);
+        cursor: pointer;
+        padding: 6px 2px 8px;
+        transition: color .2s, background .2s;
+        position: relative;
+    }
+
+    .mobile-tab::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 15%;
+        right: 15%;
+        height: 2px;
+        border-radius: 0 0 4px 4px;
+        background: var(--accent);
+        transform: scaleX(0);
+        transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+    }
+
+    .mobile-tab.active {
+        color: #fff;
+    }
+
+    .mobile-tab.active::after {
+        transform: scaleX(1);
+    }
+
+    .mobile-tab-icon {
+        font-size: 22px;
+        line-height: 1;
+    }
+
+    .mobile-tab-label {
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        line-height: 1;
+    }
+
+    /* Hide desktop sidebar nav on mobile */
+    .admin-nav { display: none !important; }
+
+    /* Body padding for fixed tab bar */
+    .admin-shell {
+        padding-bottom: 70px;
+    }
+
+    /* All admin sections hidden by default on mobile */
+    .admin-section {
+        display: none !important;
+    }
+
+    /* Only the active section is shown */
+    .admin-section.mobile-active {
+        display: block !important;
+    }
+
+    /* Stats grid always visible above sections */
+    .stats-grid {
+        display: grid !important;
+    }
+
+    /* Admin content has less padding on mobile */
+    .admin-content {
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .back-to-top {
+        bottom: 76px; /* Above tab bar */
+        right: 14px;
+    }
+}
+
+/* ══════════════════════════════════════
+   🏅 AWARDS SECTION HEADER (Student)
+══════════════════════════════════════ */
+.awards-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.awards-section-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--ink);
+}
+
+.awards-section-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #fde68a, #f59e0b);
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    box-shadow: 0 4px 12px rgba(245,158,11,.35);
+    flex-shrink: 0;
+}
+
+.awards-count-badge {
+    background: linear-gradient(135deg, var(--accent), var(--pink));
+    color: #fff;
+    font-size: 14px;
+    font-weight: 900;
+    padding: 4px 12px;
+    border-radius: 50px;
+    min-width: 36px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(124,58,237,.3);
+}
